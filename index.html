@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>전국 NACS 충전지도 V37</title>
+<title>전국 NACS 충전지도 V38</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:#f6f7f9;color:#16181d}
@@ -26,9 +26,9 @@ footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
 </style>
 </head>
 <body>
-<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V37</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
+<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V38</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
 <div class="notice" id="status">충전소 195개 위치데이터는 앱 내부에 저장되어 있습니다. 실행 중 충전소 위치를 인터넷에서 다시 찾지 않습니다.</div>
-<div class="notice">V37 휴게소 데이터 재검증판: 운영사 NACS 목록과 방향별 주소·공공 위치자료를 다시 대조했습니다. 도시 대표좌표 같은 기존 임시값은 길찾기에서 배제합니다. 추천은 ① 경로상·진행방향 일치 휴게소 → ② 출발지에서 먼저 만나는 순 → ③ 우회시간 참고 순이며, 카카오 직접 경유는 방향별 좌표가 검증된 지점만 사용합니다.</div><div id="map"></div>
+<div class="notice">V38: 카카오맵 연결을 공식 Web 길찾기 URL 형식으로 교체했습니다. 검증 좌표가 있는 충전소는 ‘현재위치 → 선택 충전소/휴게소 → 최종 목적지’ 자동차 경유 길찾기로 열립니다. 미검증 휴게소 좌표는 반대편 오안내를 막기 위해 방향별 장소검색으로 연결합니다.</div><div id="map"></div>
 <div class="controls" style="top:66px"><input id="destination" placeholder="목적지 입력 (예: 경주월드, 서울역)" style="flex:2;min-width:210px;padding:11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px"><button onclick="setDestination()">목적지 검색</button><button onclick="recommendSort()" style="background:#0f766e">추천 정렬</button><button onclick="clearDestination()" style="background:#64748b">해제</button></div><div id="destResults" style="display:none;background:white;max-height:240px;overflow:auto;border-bottom:1px solid #e5e7eb"></div><div id="routeInfo" class="notice" style="display:none"></div><div class="controls" style="top:122px">
   <input id="search" placeholder="충전소명 또는 운영사 검색">
   <button onclick="showMyLocation()">내 위치</button>
@@ -62,9 +62,9 @@ function kakaoExactRestAreaUrl(it){
 }
 
 function openKakaoRouteSafe(it,c){
-  if(!myPos || !dest || !c){ alert("현재 위치와 목적지를 먼저 확인해 주세요."); return; }
-  const app=kakaoViaUrl(it,c);
-  if(app && app!=="#") location.href=app;
+  const u=kakaoViaUrl(it,c);
+  if(!u || u==="#"){ alert("현재 위치와 목적지를 먼저 확인해 주세요."); return; }
+  window.location.href=u;
 }
 
 function openKakaoRestArea(it,c){
@@ -80,11 +80,13 @@ function openKakaoRestArea(it,c){
 }
 
 function kakaoViaUrl(it,c){
- if(!myPos||!dest||!c) return '#';
- const sp=`${Number(myPos.lat)},${Number(myPos.lon)}`;
- const vp=`${Number(c.lat)},${Number(c.lon)}`;
- const ep=`${Number(dest.lat)},${Number(dest.lon)}`;
- return `kakaomap://route?sp=${sp}&vp=${vp}&ep=${ep}&by=car`;
+  if(!myPos||!dest||!c) return '#';
+  const enc=(v)=>encodeURIComponent(String(v||""));
+  const start=`${enc("현재위치")},${Number(myPos.lat)},${Number(myPos.lon)}`;
+  const via=`${enc(it?.name||"충전소")},${Number(c.lat)},${Number(c.lon)}`;
+  const end=`${enc(dest.name||"목적지")},${Number(dest.lat)},${Number(dest.lon)}`;
+  // Kakao's documented Web directions URL: start / waypoint / destination.
+  return `https://map.kakao.com/link/by/car/${start}/${via}/${end}`;
 }
 
 function popup(it,c){return `<b>${it.name}</b><br>${it.operator} · ${it.connector}<br><br><a href="${kakaoTo(it,c)}" target="_blank">카카오맵 길찾기</a>`}
@@ -206,7 +208,7 @@ function renderRecommended(results){
  });
 }
 
-// V37: direction-aware highway rest-area validation.
+// V38: direction-aware highway rest-area validation.
 // Direction words are corridor travel directions, never geographic addresses.
 const directionAnchors={
  "서울":{lat:37.5665,lon:126.9780},"인천":{lat:37.4563,lon:126.7052},
@@ -248,7 +250,7 @@ function directionCompatibility(it,c,destination){
 }
 
 
-// V37 ranking policy:
+// V38 ranking policy:
 // 1) highway NACS actually on the base route
 // 2) nearest from trip origin / earliest along route
 // 3) detour time only as a reference tie-breaker
