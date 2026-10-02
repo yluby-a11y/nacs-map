@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>전국 NACS 충전지도 V15</title>
+<title>전국 NACS 충전지도 V16</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:#f6f7f9;color:#16181d}
@@ -26,7 +26,7 @@ footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
 </style>
 </head>
 <body>
-<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V15</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
+<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V16</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
 <div class="notice" id="status">충전소 195개 위치데이터는 앱 내부에 저장되어 있습니다. 실행 중 충전소 위치를 인터넷에서 다시 찾지 않습니다.</div>
 <div id="map"></div>
 <div class="controls" style="top:66px"><input id="destination" placeholder="목적지 입력 (예: 경주월드, 서울역)" style="flex:2;min-width:210px;padding:11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px"><button onclick="setDestination()">목적지 검색</button><button onclick="recommendSort()" style="background:#0f766e">추천 정렬</button><button onclick="clearDestination()" style="background:#64748b">해제</button></div><div id="destResults" style="display:none;background:white;max-height:240px;overflow:auto;border-bottom:1px solid #e5e7eb"></div><div id="routeInfo" class="notice" style="display:none"></div><div class="controls" style="top:122px">
@@ -70,11 +70,7 @@ function render(){
  const q=document.getElementById('search').value.trim().toLowerCase(),list=document.getElementById('list');list.innerHTML='';markers.clearLayers();let arr=[];
  items.forEach((it,i)=>{if(selectedOp!=='ALL'&&it.operator!==selectedOp)return;if(q&&!((it.name+' '+it.operator).toLowerCase().includes(q)))return;const c=coords[i];let detour=null,progress=null;if(c&&route){detour=routeDistanceKm(c);progress=routeProgressKm(c)}arr.push({it,i,c,detour,progress});});
  if(recommendMode&&route){
-   {
-    const withCoord=arr.filter(x=>x.c);
-    const near=withCoord.filter(x=>x.detour<=35);
-    arr=near.length?near:withCoord.sort((a,b)=>a.detour-b.detour).slice(0,12);
-  };
+   arr=arr.filter(x=>x.c&&x.detour<=15);
    arr.sort((a,b)=>{
      // Encounter order is primary. At nearly the same route position, prefer rest areas.
      if(Math.abs(a.progress-b.progress)>8)return a.progress-b.progress;
@@ -85,7 +81,7 @@ function render(){
  }
  arr.forEach((x,rank)=>{const {it,c,detour,progress}=x;if(c)L.marker([c.lat,c.lon]).addTo(markers).bindPopup(popup(it,c));const card=document.createElement('div');card.className='card';
  card.innerHTML=`<div class="row"><div class="name">${recommendMode?'⭐ ':''}${it.name}</div><div class="op">${it.operator}</div></div><div class="meta">${it.status} · ${it.connector}${it.count?' · NACS '+it.count+'면':''}${recommendMode?' · 경로 이탈 '+detour.toFixed(1)+'km · 출발 후 약 '+Math.round(progress)+'km':''}</div><div class="actions">${recommendMode&&c?`<a class="btn kakao" target="_blank" href="${kakaoViaUrl(it,c)}">카카오맵 경유 길찾기</a>`:`<a class="btn kakao" target="_blank" href="${kakaoTo(it,c)}">${c?'카카오맵 길찾기':'카카오맵에서 찾기'}</a>`}<a class="btn search" target="_blank" href="${kakaoSearch(it)}">장소 확인</a>${c?`<button class="locate" onclick="map.setView([${c.lat},${c.lon}],14);window.scrollTo({top:0,behavior:'smooth'})">지도에서 보기</button>`:''}</div>`;list.appendChild(card);});
- document.getElementById('status').textContent=recommendMode?`추천 ${arr.length}개 · 앱 내장 위치데이터 기준 · 경로 인접/진행 순`:`${arr.length}개 표시 · 지도 좌표 확인 ${Object.keys(coords).length}/${items.length}개`;
+ document.getElementById('status').textContent=recommendMode?`추천 ${arr.length}개 · 앱 내장 위치데이터 기준 · 실제 경로 15km 이내 · 출발지에서 만나는 순서`:`${arr.length}개 표시 · 지도 좌표 확인 ${Object.keys(coords).length}/${items.length}개`;
 }
 let myPos=null,dest=null,route=null,routeLayer=null,recommendMode=false;
 let myMarker=null,destMarker=null;
@@ -122,7 +118,13 @@ function segDistanceKm(p,a,b){ // equirectangular projection, sufficient for ran
  const vx=bx-ax,vy=by-ay, wx=px-ax,wy=py-ay, vv=vx*vx+vy*vy; let t=vv?Math.max(0,Math.min(1,(wx*vx+wy*vy)/vv)):0;
  return Math.hypot(px-(ax+t*vx),py-(ay+t*vy));
 }
-const BUILTIN_POI={"불국사":{"lat":35.79,"lon":129.3321,"name":"불국사"},"경주 불국사":{"lat":35.79,"lon":129.3321,"name":"경주 불국사"},"롯데월드":{"lat":37.5111,"lon":127.0982,"name":"롯데월드"},"서울역":{"lat":37.5547,"lon":126.9707,"name":"서울역"},"경주월드":{"lat":35.8369,"lon":129.2820,"name":"경주월드"}};
+const BUILTIN_POI={
+ "불국사":{lat:"35.7900",lon:"129.3321",display_name:"불국사 · 경상북도 경주시 불국로 385"},
+ "경주 불국사":{lat:"35.7900",lon:"129.3321",display_name:"불국사 · 경상북도 경주시 불국로 385"},
+ "롯데월드":{lat:"37.5111",lon:"127.0982",display_name:"롯데월드 · 서울특별시 송파구 올림픽로 240"},
+ "서울역":{lat:"37.5547",lon:"126.9707",display_name:"서울역 · 서울특별시 용산구"},
+ "경주월드":{lat:"35.8369",lon:"129.2820",display_name:"경주월드 · 경상북도 경주시"}
+};
 async function geocodeText(q){
  const key=q.trim(); if(BUILTIN_POI[key])return [BUILTIN_POI[key]];
  const variants=[q,q+' 대한민국',q+' 관광지 대한민국',q+' 역 대한민국']; let all=[];
@@ -148,7 +150,7 @@ async function recommendSort(){
   map.fitBounds(routeLayer.getBounds(),{padding:[20,20]});
   recommendMode=true;render();
   const known=items.filter((it,i)=>coords[i]).length;
-  info.textContent=`추천 정렬 완료 · 자동차 경로 약 ${(d.routes[0].distance/1000).toFixed(0)}km · 내장 좌표 ${known}/${items.length}개 기준 · 실시간 충전소 검색 없음`;
+  info.textContent=`추천 정렬 완료 · 자동차 경로 약 ${(d.routes[0].distance/1000).toFixed(0)}km · 실시간 충전소 검색 없음`;
  }catch(e){info.textContent='경로 계산에 실패했습니다. 잠시 후 다시 눌러 주세요.'}
 }
 document.getElementById('destination').addEventListener('keydown',e=>{if(e.key==='Enter')setDestination();});
