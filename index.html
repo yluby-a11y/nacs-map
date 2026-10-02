@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>전국 NACS 충전지도 V12</title>
+<title>전국 NACS 충전지도 V13</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:#f6f7f9;color:#16181d}
@@ -26,8 +26,8 @@ footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
 </style>
 </head>
 <body>
-<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V12</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
-<div class="notice" id="status">목적지 검색 → 선택 → 추천 정렬 → 추천 충전소의 ‘카카오맵 경유 길찾기’ 순서로 이용하세요.</div>
+<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V13</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
+<div class="notice" id="status">충전소 목록·좌표는 앱 내부 저장값을 사용합니다. 목적지 경로만 계산해 즉시 추천 정렬합니다.</div>
 <div id="map"></div>
 <div class="controls" style="top:66px"><input id="destination" placeholder="목적지 입력 (예: 경주월드, 서울역)" style="flex:2;min-width:210px;padding:11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px"><button onclick="setDestination()">목적지 검색</button><button onclick="recommendSort()" style="background:#0f766e">추천 정렬</button><button onclick="clearDestination()" style="background:#64748b">해제</button></div><div id="destResults" style="display:none;background:white;max-height:240px;overflow:auto;border-bottom:1px solid #e5e7eb"></div><div id="routeInfo" class="notice" style="display:none"></div><div class="controls" style="top:122px">
   <input id="search" placeholder="충전소명 또는 운영사 검색">
@@ -81,12 +81,7 @@ function render(){
  }
  arr.forEach((x,rank)=>{const {it,c,detour,progress}=x;if(c)L.marker([c.lat,c.lon]).addTo(markers).bindPopup(popup(it,c));const card=document.createElement('div');card.className='card';
  card.innerHTML=`<div class="row"><div class="name">${recommendMode?'⭐ ':''}${it.name}</div><div class="op">${it.operator}</div></div><div class="meta">${it.status} · ${it.connector}${it.count?' · NACS '+it.count+'면':''}${recommendMode?' · 경로 이탈 '+detour.toFixed(1)+'km · 출발 후 약 '+Math.round(progress)+'km':''}</div><div class="actions">${recommendMode&&c?`<a class="btn kakao" target="_blank" href="${kakaoViaUrl(it,c)}">카카오맵 경유 길찾기</a>`:`<a class="btn kakao" target="_blank" href="${kakaoTo(it,c)}">${c?'카카오맵 길찾기':'카카오맵에서 찾기'}</a>`}<a class="btn search" target="_blank" href="${kakaoSearch(it)}">장소 확인</a>${c?`<button class="locate" onclick="map.setView([${c.lat},${c.lon}],14);window.scrollTo({top:0,behavior:'smooth'})">지도에서 보기</button>`:''}</div>`;list.appendChild(card);});
- document.getElementById('status').textContent=recommendMode?`추천 ${arr.length}개 · 실제 경로 15km 이내 · 출발지에서 만나는 순서`:`${arr.length}개 표시 · 지도 좌표 확인 ${Object.keys(coords).length}/${items.length}개`;
-}
-async function geocodeOne(i){
- if(coords[i])return coords[i];const it=items[i],base=cleanName(it.name),qs=[it.name+' 대한민국',base+'휴게소 대한민국',base+' 고속도로 휴게소 대한민국',base+' 대한민국'];
- for(const qq of qs){try{const u='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=kr&q='+encodeURIComponent(qq),res=await fetch(u,{headers:{'Accept-Language':'ko'}}),d=await res.json();if(d&&d[0]){coords[i]={lat:+d[0].lat,lon:+d[0].lon};localStorage.setItem('nacs_coords_v10',JSON.stringify(coords));return coords[i]}}catch(e){}}
- return null;
+ document.getElementById('status').textContent=recommendMode?`추천 ${arr.length}개 · 저장 좌표 기준 · 실제 경로 15km 이내 · 출발지에서 만나는 순서`:`${arr.length}개 표시 · 지도 좌표 확인 ${Object.keys(coords).length}/${items.length}개`;
 }
 let myPos=null,dest=null,route=null,routeLayer=null,recommendMode=false;
 let myMarker=null,destMarker=null;
@@ -136,16 +131,18 @@ async function setDestination(){
 function chooseDestination(i){const r=window._destCandidates[i];if(!r)return;dest={lat:r.lat,lon:r.lon,name:r.name};recommendMode=false;document.getElementById('destination').value=r.name;document.getElementById('destResults').style.display='none';document.getElementById('routeInfo').style.display='block';document.getElementById('routeInfo').textContent='목적지 선택 완료: '+r.name+' · 이제 추천 정렬을 눌러 주세요.';if(destMarker)map.removeLayer(destMarker);destMarker=L.marker([dest.lat,dest.lon]).addTo(map).bindPopup('목적지: '+r.name);render();}
 async function recommendSort(){
  if(!dest)return alert('먼저 목적지를 검색해서 결과에서 선택해 주세요.');
- if(!myPos){try{await getMyPos(false)}catch(e){return alert('추천 정렬에는 위치 권한이 필요합니다.')}}
- const info=document.getElementById('routeInfo');info.style.display='block';info.textContent='자동차 경로를 계산 중...';
+ if(!myPos){try{await getMyPos(false)}catch(e){return alert('현재 위치를 가져오지 못했습니다. 내 위치 버튼을 먼저 눌러 확인해 주세요.')}}
+ const info=document.getElementById('routeInfo');info.style.display='block';info.textContent='자동차 경로 계산 중...';
  try{
-  const u=`https://router.project-osrm.org/route/v1/driving/${myPos.lon},${myPos.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`,r=await fetch(u),d=await r.json();if(!d.routes?.length)throw 0;
-  route=d.routes[0].geometry.coordinates.map(c=>({lat:c[1],lon:c[0]}));if(routeLayer)map.removeLayer(routeLayer);routeLayer=L.polyline(route.map(x=>[x.lat,x.lon]),{weight:5}).addTo(map);map.fitBounds(routeLayer.getBounds(),{padding:[20,20]});
-  // First use cached coordinates immediately. Resolve unresolved REST AREAS only, sequentially, because they are priority recommendations.
+  const u=`https://router.project-osrm.org/route/v1/driving/${myPos.lon},${myPos.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`;
+  const r=await fetch(u),d=await r.json();if(!d.routes?.length)throw 0;
+  route=d.routes[0].geometry.coordinates.map(c=>({lat:c[1],lon:c[0]}));
+  if(routeLayer)map.removeLayer(routeLayer);
+  routeLayer=L.polyline(route.map(x=>[x.lat,x.lon]),{weight:5}).addTo(map);
+  map.fitBounds(routeLayer.getBounds(),{padding:[20,20]});
   recommendMode=true;render();
-  const missing=items.map((it,i)=>({it,i})).filter(x=>/휴게소/.test(x.it.name)&&!coords[x.i]);
-  if(missing.length){info.textContent=`경로 계산 완료 · 휴게소 위치 확인 중 (${missing.length}개)`;let k=0;for(const x of missing){await geocodeOne(x.i);k++;if(k%4===0)render();await new Promise(z=>setTimeout(z,1050));}}
-  render();info.textContent=`추천 정렬 완료 · 추천 충전소에서 ‘카카오맵 경유 길찾기’를 누르세요 · 자동차 경로 약 ${(d.routes[0].distance/1000).toFixed(0)}km · 경로 15km 이내를 출발지에서 만나는 순서로 표시합니다.`;
+  const known=items.filter((it,i)=>coords[i]).length;
+  info.textContent=`추천 정렬 완료 · 자동차 경로 약 ${(d.routes[0].distance/1000).toFixed(0)}km · 저장된 좌표 ${known}/${items.length}개 기준 · 실시간 충전소 검색 없음`;
  }catch(e){info.textContent='경로 계산에 실패했습니다. 잠시 후 다시 눌러 주세요.'}
 }
 document.getElementById('destination').addEventListener('keydown',e=>{if(e.key==='Enter')setDestination();});
