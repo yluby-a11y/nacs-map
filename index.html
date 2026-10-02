@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>전국 NACS 충전지도 · 수퍼차저 제외</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:#f6f7f9;color:#16181d}
+header{padding:14px 16px;background:#111827;color:white;position:sticky;top:0;z-index:1000}
+header h1{font-size:18px;margin:0 0 4px} header p{font-size:12px;margin:0;color:#cbd5e1}
+#map{height:46vh;min-height:330px;background:#e5e7eb}
+.controls{padding:10px;background:white;display:flex;gap:8px;flex-wrap:wrap;position:sticky;top:66px;z-index:900;border-bottom:1px solid #e5e7eb}
+.controls input{flex:1;min-width:180px;padding:11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px}
+button,.chip,a.btn{border:0;border-radius:10px;padding:10px 12px;font-weight:700;font-size:13px;text-decoration:none;display:inline-block;cursor:pointer}
+button{background:#111827;color:white} .chip{background:#eef2f7;color:#334155} .chip.active{background:#111827;color:white}
+.notice{padding:9px 14px;font-size:12px;background:#fff7ed;color:#9a3412;border-bottom:1px solid #fed7aa}
+#list{padding:10px;display:grid;gap:8px}
+.card{background:white;border-radius:14px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.row{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.name{font-size:15px;font-weight:800} .op{font-size:11px;font-weight:800;padding:4px 7px;border-radius:999px;background:#e5e7eb;white-space:nowrap}
+.meta{font-size:12px;color:#64748b;margin:6px 0 10px;line-height:1.45}
+.actions{display:flex;gap:6px;flex-wrap:wrap} a.kakao{background:#FEE500;color:#191919} a.search{background:#e8eef7;color:#1e3a5f} button.locate{background:#eef2f7;color:#111827}
+footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
+.leaflet-popup-content{min-width:190px}
+</style>
+</head>
+<body>
+<header><h1>⚡ 전국 NACS 충전지도</h1><p>테슬라 수퍼차저 제외 · WATER / CHAEVI / SK일렉링크</p></header>
+<div class="notice" id="status">지도 위치를 준비 중입니다. 처음 열 때 지점 좌표를 순차 확인하므로 잠시 걸릴 수 있습니다.</div>
+<div id="map"></div>
+<div class="controls">
+  <input id="search" placeholder="충전소명 또는 운영사 검색">
+  <button onclick="showMyLocation()">내 위치</button>
+  <span class="chip active" data-op="ALL">전체</span>
+  <span class="chip" data-op="WATER">WATER</span>
+  <span class="chip" data-op="CHAEVI">CHAEVI</span>
+  <span class="chip" data-op="SK일렉링크">SK일렉링크</span>
+</div>
+<div id="list"></div>
+<footer>데이터 기준 2026-10-02 · WATER 신규 지점은 순차 개통 상태를 확인하세요.</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const items=[{"operator": "WATER", "name": "강릉대관령휴게소 강릉방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 강릉대관령휴게소 강릉방향"}, {"operator": "WATER", "name": "강릉대관령휴게소 인천방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 강릉대관령휴게소 인천방향"}, {"operator": "WATER", "name": "경주휴게소 부산방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 경주휴게소 부산방향"}, {"operator": "WATER", "name": "고성공룡나라휴게소 대전방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 고성공룡나라휴게소 대전방향"}, {"operator": "WATER", "name": "고성공룡나라휴게소 통영방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 고성공룡나라휴게소 통영방향"}, {"operator": "WATER", "name": "괴산휴게소 창원방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 괴산휴게소 창원방향"}, {"operator": "WATER", "name": "군위휴게소 부산방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 군위휴게소 부산방향"}, {"operator": "WATER", "name": "남성주참외휴게소 양평방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 남성주참외휴게소 양평방향"}, {"operator": "WATER", "name": "내린천휴게소 서울방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 내린천휴게소 서울방향"}, {"operator": "WATER", "name": "내린천휴게소 양양방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 내린천휴게소 양양방향"}, {"operator": "WATER", "name": "문경휴게소 양평방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 문경휴게소 양평방향"}, {"operator": "WATER", "name": "문경휴게소 창원방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 문경휴게소 창원방향"}, {"operator": "WATER", "name": "문막휴게소 인천방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 문막휴게소 인천방향"}, {"operator": "WATER", "name": "산청휴게소 통영방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 산청휴게소 통영방향"}, {"operator": "WATER", "name": "서여주휴게소 창원방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 서여주휴게소 창원방향"}, {"operator": "WATER", "name": "안동휴게소 부산방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 안동휴게소 부산방향"}, {"operator": "WATER", "name": "여주휴게소 강릉방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 여주휴게소 강릉방향"}, {"operator": "WATER", "name": "영산휴게소 창원방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 영산휴게소 창원방향"}, {"operator": "WATER", "name": "영천휴게소 대구방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 영천휴게소 대구방향"}, {"operator": "WATER", "name": "옥계휴게소 속초방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 옥계휴게소 속초방향"}, {"operator": "WATER", "name": "용인휴게소 강릉방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 용인휴게소 강릉방향"}, {"operator": "WATER", "name": "용인휴게소 인천방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 용인휴게소 인천방향"}, {"operator": "WATER", "name": "원주휴게소 춘천방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 원주휴게소 춘천방향"}, {"operator": "WATER", "name": "의성휴게소 청주방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 의성휴게소 청주방향"}, {"operator": "WATER", "name": "천등산휴게소 제천방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 천등산휴게소 제천방향"}, {"operator": "WATER", "name": "천등산휴게소 평택방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 천등산휴게소 평택방향"}, {"operator": "WATER", "name": "청통휴게소 대구방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 청통휴게소 대구방향"}, {"operator": "WATER", "name": "충주휴게소 양평방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 충주휴게소 양평방향"}, {"operator": "WATER", "name": "칠곡휴게소 서울방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 칠곡휴게소 서울방향"}, {"operator": "WATER", "name": "평창휴게소 강릉방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 평창휴게소 강릉방향"}, {"operator": "WATER", "name": "함안휴게소 부산방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 함안휴게소 부산방향"}, {"operator": "WATER", "name": "함안휴게소 순천방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 함안휴게소 순천방향"}, {"operator": "WATER", "name": "현풍휴게소 대구방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 현풍휴게소 대구방향"}, {"operator": "WATER", "name": "현풍휴게소 창원방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 현풍휴게소 창원방향"}, {"operator": "WATER", "name": "홍천강휴게소 춘천방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 홍천강휴게소 춘천방향"}, {"operator": "WATER", "name": "홍천휴게소 서울방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 홍천휴게소 서울방향"}, {"operator": "WATER", "name": "홍천휴게소 양양방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 홍천휴게소 양양방향"}, {"operator": "WATER", "name": "횡성휴게소 강릉방향", "status": "현재 목록(2026-05 공식공지)", "connector": "NACS 직결", "count": "", "query": "WATER 횡성휴게소 강릉방향"}, {"operator": "WATER", "name": "구정휴게소 삼척방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 구정휴게소 삼척방향"}, {"operator": "WATER", "name": "구정휴게소 속초방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 구정휴게소 속초방향"}, {"operator": "WATER", "name": "금왕휴게소 제천방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 금왕휴게소 제천방향"}, {"operator": "WATER", "name": "금왕휴게소 평택방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 금왕휴게소 평택방향"}, {"operator": "WATER", "name": "동해휴게소 삼척방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 동해휴게소 삼척방향"}, {"operator": "WATER", "name": "문막휴게소 강릉방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 문막휴게소 강릉방향"}, {"operator": "WATER", "name": "서산휴게소 목포방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 서산휴게소 목포방향"}, {"operator": "WATER", "name": "속리산휴게소 청주방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 속리산휴게소 청주방향"}, {"operator": "WATER", "name": "신탄진휴게소 서울방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 신탄진휴게소 서울방향"}, {"operator": "WATER", "name": "안성맞춤휴게소 제천방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 안성맞춤휴게소 제천방향"}, {"operator": "WATER", "name": "안성맞춤휴게소 평택방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 안성맞춤휴게소 평택방향"}, {"operator": "WATER", "name": "예산휴게소 당진방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 예산휴게소 당진방향"}, {"operator": "WATER", "name": "원주휴게소 부산방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 원주휴게소 부산방향"}, {"operator": "WATER", "name": "음성휴게소 남이방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 음성휴게소 남이방향"}, {"operator": "WATER", "name": "음성휴게소 하남방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 음성휴게소 하남방향"}, {"operator": "WATER", "name": "입장거봉포도휴게소 서울방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 입장거봉포도휴게소 서울방향"}, {"operator": "WATER", "name": "죽암휴게소 서울방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 죽암휴게소 서울방향"}, {"operator": "WATER", "name": "천안호두휴게소 부산방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 천안호두휴게소 부산방향"}, {"operator": "WATER", "name": "청주휴게소 서울방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 청주휴게소 서울방향"}, {"operator": "WATER", "name": "춘천휴게소 부산방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 춘천휴게소 부산방향"}, {"operator": "WATER", "name": "충주휴게소 창원방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 충주휴게소 창원방향"}, {"operator": "WATER", "name": "치악휴게소 부산방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 치악휴게소 부산방향"}, {"operator": "WATER", "name": "화서휴게소 영덕방향", "status": "2026-10부터 순차 오픈", "connector": "NACS 지원", "count": "", "query": "WATER 화서휴게소 영덕방향"}, {"operator": "CHAEVI", "name": "경산휴게소 서울방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 3, "query": "채비 경산휴게소 서울방향"}, {"operator": "CHAEVI", "name": "김천휴게소 부산방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 6, "query": "채비 김천휴게소 부산방향"}, {"operator": "CHAEVI", "name": "김천휴게소 서울방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 3, "query": "채비 김천휴게소 서울방향"}, {"operator": "CHAEVI", "name": "언양휴게소 서울방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 6, "query": "채비 언양휴게소 서울방향"}, {"operator": "CHAEVI", "name": "추풍령휴게소 부산방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 4, "query": "채비 추풍령휴게소 부산방향"}, {"operator": "CHAEVI", "name": "칠곡휴게소 부산방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 6, "query": "채비 칠곡휴게소 부산방향"}, {"operator": "CHAEVI", "name": "평사휴게소 부산방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 3, "query": "채비 평사휴게소 부산방향"}, {"operator": "CHAEVI", "name": "거창휴게소 광주방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 2, "query": "채비 거창휴게소 광주방향"}, {"operator": "CHAEVI", "name": "거창휴게소 대구방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 2, "query": "채비 거창휴게소 대구방향"}, {"operator": "CHAEVI", "name": "문산휴게소 순천방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 3, "query": "채비 문산휴게소 순천방향"}, {"operator": "CHAEVI", "name": "외동휴게소 부산방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 4, "query": "채비 외동휴게소 부산방향"}, {"operator": "CHAEVI", "name": "외동휴게소 포항방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 3, "query": "채비 외동휴게소 포항방향"}, {"operator": "CHAEVI", "name": "영천휴게소 포항방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 3, "query": "채비 영천휴게소 포항방향"}, {"operator": "CHAEVI", "name": "와촌휴게소 포항방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 3, "query": "채비 와촌휴게소 포항방향"}, {"operator": "CHAEVI", "name": "함평천지휴게소 서울방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 3, "query": "채비 함평천지휴게소 서울방향"}, {"operator": "CHAEVI", "name": "울주휴게소 울산방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 2, "query": "채비 울주휴게소 울산방향"}, {"operator": "CHAEVI", "name": "남성주참외휴게소 창원방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 3, "query": "채비 남성주참외휴게소 창원방향"}, {"operator": "CHAEVI", "name": "논공휴게소 대구방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 2, "query": "채비 논공휴게소 대구방향"}, {"operator": "CHAEVI", "name": "성주휴게소 양평방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 3, "query": "채비 성주휴게소 양평방향"}, {"operator": "CHAEVI", "name": "칠서휴게소 양평방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 3, "query": "채비 칠서휴게소 양평방향"}, {"operator": "CHAEVI", "name": "함양휴게소 대전방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 1, "query": "채비 함양휴게소 대전방향"}, {"operator": "CHAEVI", "name": "함양휴게소 통영방향", "status": "2026-07 공식 NACS 목록", "connector": "NACS 직결", "count": 2, "query": "채비 함양휴게소 통영방향"}, {"operator": "SK일렉링크", "name": "김제휴게소 새만금방향", "status": "운영 확인 보도", "connector": "CCS1·NACS 겸용", "count": "", "query": "SK일렉링크 김제휴게소 새만금방향"}, {"operator": "SK일렉링크", "name": "김제휴게소 전주방향", "status": "운영 확인 보도", "connector": "CCS1·NACS 겸용", "count": "", "query": "SK일렉링크 김제휴게소 전주방향"}, {"operator": "SK일렉링크", "name": "이서휴게소 순천방향", "status": "운영 확인 보도", "connector": "CCS1·NACS 겸용", "count": "", "query": "SK일렉링크 이서휴게소 순천방향"}, {"operator": "SK일렉링크", "name": "이서휴게소 천안방향", "status": "운영 확인 보도", "connector": "CCS1·NACS 겸용", "count": "", "query": "SK일렉링크 이서휴게소 천안방향"}, {"operator": "SK일렉링크", "name": "서여주휴게소 양평방향", "status": "운영 확인 보도", "connector": "CCS1·NACS 겸용", "count": "", "query": "SK일렉링크 서여주휴게소 양평방향"}, {"operator": "SK일렉링크", "name": "금산인삼랜드휴게소 대전방향", "status": "2026-07 사진/보도 확인", "connector": "CCS1·NACS 겸용", "count": "", "query": "SK일렉링크 금산인삼랜드휴게소 대전방향"}];
+const map=L.map('map').setView([36.2,127.8],7);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+const markers=L.layerGroup().addTo(map);
+let selectedOp='ALL', coords={};
+try{coords=JSON.parse(localStorage.getItem('nacs_coords_v1')||'{}')}catch(e){}
+function cleanName(n){ return n.replace(/휴게소/g,'').replace(/\s*(서울|부산|강릉|인천|대전|통영|창원|양평|춘천|속초|대구|순천|제천|평택|청주|영덕|삼척|목포|당진|남이|하남|새만금|전주|광주|포항|울산)방향/g,'').trim(); }
+function kakaoSearch(it){return 'https://map.kakao.com/link/search/'+encodeURIComponent(it.name)}
+function kakaoTo(it,c){return c ? 'https://map.kakao.com/link/to/'+encodeURIComponent(it.name)+','+c.lat+','+c.lon : kakaoSearch(it)}
+function popup(it,c){return `<b>${it.name}</b><br>${it.operator} · ${it.connector}<br><br><a href="${kakaoTo(it,c)}" target="_blank">카카오맵 길찾기</a>`}
+function render(){
+  const q=document.getElementById('search').value.trim().toLowerCase();
+  const list=document.getElementById('list'); list.innerHTML=''; markers.clearLayers();
+  let shown=0;
+  items.forEach((it,i)=>{
+    if(selectedOp!=='ALL'&&it.operator!==selectedOp)return;
+    if(q&&!((it.name+' '+it.operator).toLowerCase().includes(q)))return;
+    shown++;
+    const c=coords[i];
+    if(c) L.marker([c.lat,c.lon]).addTo(markers).bindPopup(popup(it,c));
+    const card=document.createElement('div'); card.className='card';
+    card.innerHTML=`<div class="row"><div class="name">${it.name}</div><div class="op">${it.operator}</div></div>
+      <div class="meta">${it.status} · ${it.connector}${it.count?' · NACS '+it.count+'면':''}</div>
+      <div class="actions">
+        <a class="btn kakao" target="_blank" href="${kakaoTo(it,c)}">${c?'카카오맵 길찾기':'카카오맵에서 찾기'}</a>
+        <a class="btn search" target="_blank" href="${kakaoSearch(it)}">장소 확인</a>
+        ${c?`<button class="locate" onclick="map.setView([${c.lat},${c.lon}],14);window.scrollTo({top:0,behavior:'smooth'})">지도에서 보기</button>`:''}
+      </div>`;
+    list.appendChild(card);
+  });
+  document.getElementById('status').textContent=`${shown}개 표시 · 지도 좌표 확인 ${Object.keys(coords).length}/${items.length}개`;
+}
+async function geocodeMissing(){
+  // 공개 지오코딩은 처음 1회만 천천히 실행하고 결과를 기기에 저장합니다.
+  for(let i=0;i<items.length;i++){
+    if(coords[i]) continue;
+    const it=items[i];
+    const queries=[it.name+' 대한민국', cleanName(it.name)+' 휴게소 대한민국'];
+    let found=null;
+    for(const qq of queries){
+      try{
+        const u='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=kr&q='+encodeURIComponent(qq);
+        const res=await fetch(u,{headers:{'Accept-Language':'ko'}});
+        const d=await res.json();
+        if(d&&d[0]){found={lat:+d[0].lat,lon:+d[0].lon};break}
+      }catch(e){}
+    }
+    if(found){coords[i]=found;localStorage.setItem('nacs_coords_v1',JSON.stringify(coords));}
+    if(i%4===0) render();
+    await new Promise(r=>setTimeout(r,1100));
+  }
+  render();
+}
+function showMyLocation(){
+ if(!navigator.geolocation) return alert('위치 기능을 사용할 수 없습니다.');
+ navigator.geolocation.getCurrentPosition(p=>{
+   L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:8}).addTo(map).bindPopup('내 위치').openPopup();
+   map.setView([p.coords.latitude,p.coords.longitude],10);
+ },()=>alert('브라우저에서 위치 권한을 허용해 주세요.'));
+}
+document.getElementById('search').addEventListener('input',render);
+document.querySelectorAll('.chip').forEach(x=>x.onclick=()=>{document.querySelectorAll('.chip').forEach(y=>y.classList.remove('active'));x.classList.add('active');selectedOp=x.dataset.op;render();});
+render(); geocodeMissing();
+</script>
+</body></html>
