@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>전국 NACS 충전지도 V44</title>
+<title>전국 NACS 충전지도 V45</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:#f6f7f9;color:#16181d}
@@ -23,6 +23,8 @@ button{background:#111827;color:white} .chip{background:#eef2f7;color:#334155} .
 .actions{display:flex;gap:6px;flex-wrap:wrap} a.kakao{background:#FEE500;color:#191919} a.search{background:#e8eef7;color:#1e3a5f} button.locate{background:#eef2f7;color:#111827}
 footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
 .leaflet-popup-content{min-width:190px}
+.sortbtn{background:#eef2f7!important;color:#334155!important;padding:8px 12px!important;border-radius:10px!important;font-size:13px!important}
+.sortbtn.active{background:#0f172a!important;color:#fff!important}
 </style>
 <style>
 @keyframes recspin{to{transform:rotate(360deg)}}
@@ -30,7 +32,7 @@ footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
 </style>
 </head>
 <body>
-<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V44</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
+<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V45</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
 <div class="notice" id="status">충전소 195개 위치데이터는 앱 내부에 저장되어 있습니다. 실행 중 충전소 위치를 인터넷에서 다시 찾지 않습니다.</div>
 <div id="map"></div>
 <div class="controls" style="top:66px"><input id="destination" placeholder="목적지 입력 (예: 경주월드, 서울역)" style="flex:2;min-width:210px;padding:11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px"><button onclick="setDestination()">목적지 검색</button><button id="recommendBtn" onclick="recommendSort()" style="background:#0f766e">추천 정렬</button>
@@ -41,6 +43,14 @@ footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
   <span class="chip" data-op="WATER">WATER</span>
   <span class="chip" data-op="CHAEVI">CHAEVI</span>
   <span class="chip" data-op="SK일렉링크">SK일렉링크</span>
+</div>
+<div id="resultSort" style="display:none;padding:8px 12px;background:#fff;border-bottom:1px solid #e5e7eb">
+  <div style="font-size:12px;color:#64748b;margin-bottom:6px">리스트 정렬</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap">
+    <button class="sortbtn active" data-sort="recommend" onclick="setResultSort('recommend')">추천순</button>
+    <button class="sortbtn" data-sort="distance" onclick="setResultSort('distance')">거리순</button>
+    <button class="sortbtn" data-sort="detour" onclick="setResultSort('detour')">우회시간순</button>
+  </div>
 </div>
 <div id="list"></div>
 <footer>충전소 목록 기준 2026-10-02 · WATER 신규 지점은 순차 개통 상태를 확인하세요.</footer>
@@ -130,7 +140,7 @@ async function showMyLocation(){
  catch(e){alert('현재 위치를 가져오지 못했습니다. 브라우저의 이 사이트 위치 권한을 확인해 주세요.')}
 }
 function clearDestination(){
- dest=null;route=null;recommendMode=false;
+ dest=null;route=null;recommendMode=false;lastRecommendedResults=[];document.getElementById('resultSort').style.display='none';
  document.getElementById('destination').value='';
  document.getElementById('destResults').style.display='none';
  document.getElementById('routeInfo').style.display='none';
@@ -186,7 +196,21 @@ async function setDestination(){
  const box=document.getElementById('destResults');box.innerHTML='<div style="padding:10px">검색 중...</div>';box.style.display='block';
  try{const results=await geocodeText(q);if(!results.length){box.innerHTML='<div style="padding:10px">검색 결과가 없습니다. 예: 경주 불국사</div>';return;}window._destCandidates=results;box.innerHTML=results.map((r,i)=>`<button onclick="chooseDestination(${i})" style="display:block;width:100%;text-align:left;background:white;color:#111827;border-bottom:1px solid #e5e7eb;border-radius:0;padding:11px"><b>${r.name}</b><br><span style="font-size:11px;color:#64748b">${r.display}</span></button>`).join('');}catch(e){box.innerHTML='<div style="padding:10px">검색에 실패했습니다. 잠시 후 다시 시도해 주세요.</div>';}
 }
-function chooseDestination(i){const r=window._destCandidates[i];if(!r)return;dest={lat:r.lat,lon:r.lon,name:r.name};recommendMode=false;document.getElementById('destination').value=r.name;document.getElementById('destResults').style.display='none';document.getElementById('routeInfo').style.display='block';document.getElementById('routeInfo').textContent='목적지 선택 완료: '+r.name+' · 이제 추천 정렬을 눌러 주세요.';if(destMarker)map.removeLayer(destMarker);destMarker=L.marker([dest.lat,dest.lon]).addTo(map).bindPopup('목적지: '+r.name);render();}
+function chooseDestination(i){const r=window._destCandidates[i];if(!r)return;dest={lat:r.lat,lon:r.lon,name:r.name};recommendMode=false;lastRecommendedResults=[];document.getElementById('resultSort').style.display='none';document.getElementById('destination').value=r.name;document.getElementById('destResults').style.display='none';document.getElementById('routeInfo').style.display='block';document.getElementById('routeInfo').textContent='목적지 선택 완료: '+r.name+' · 이제 추천 정렬을 눌러 주세요.';if(destMarker)map.removeLayer(destMarker);destMarker=L.marker([dest.lat,dest.lon]).addTo(map).bindPopup('목적지: '+r.name);render();}
+let lastRecommendedResults=[];
+let resultSortMode="recommend";
+function sortRecommendedResults(results,mode){
+ const a=[...results];
+ if(mode==="distance") a.sort((x,y)=>(Number.isFinite(x.prog)?x.prog:1e12)-(Number.isFinite(y.prog)?y.prog:1e12));
+ else if(mode==="detour") a.sort((x,y)=>(Number.isFinite(x.extraSec)?x.extraSec:1e12)-(Number.isFinite(y.extraSec)?y.extraSec:1e12));
+ else a.sort((x,y)=>{const A=rankKey(x),B=rankKey(y);if(A.onRoute!==B.onRoute)return A.onRoute-B.onRoute;if(Math.abs(A.near-B.near)>0.2)return A.near-B.near;return A.extra-B.extra;});
+ return a;
+}
+function setResultSort(mode){
+ resultSortMode=mode;
+ document.querySelectorAll(".sortbtn").forEach(b=>b.classList.toggle("active",b.dataset.sort===mode));
+ if(lastRecommendedResults.length)renderRecommended(sortRecommendedResults(lastRecommendedResults,mode));
+}
 function renderRecommended(results){
  const list=document.getElementById('list'); list.innerHTML=''; markers.clearLayers();
  results.forEach((x,rank)=>{
@@ -198,15 +222,20 @@ function renderRecommended(results){
   const q=coordQuality[String(x.i)]||"unverified";
   const qLabel=q==="operator_pin"?"운영사 공식핀":q==="verified"?"좌표확인":q==="official_address"?"공식주소":q==="restarea_address"?"방향별 주소확인":q==="direction_verified"?"방향확인":"위치추정";
   const dirLabel=x.it.highwayRestArea?(x.dirScore>=-0.15?" · 진행방향 일치":" · 방향검토"):"";
+  const distLabel=Number.isFinite(x.prog)?` · 출발 후 ${Math.round(x.prog)}km`:"";
+  const navVerified=!!navCoords[String(x.i)];
   const card=document.createElement('div'); card.className='card';
   card.innerHTML=`<div class="row"><div class="name">⭐ ${rank+1}. ${it.name}</div><div class="op">${it.operator}</div></div>
-  <div class="meta">${it.address?it.address+' · ':''}${it.status} · ${it.connector}${it.count?' · NACS '+it.count+'면':''} · <b>${extraLabel}</b> · ${qLabel}${dirLabel}</div>
-  <div class="actions"><a class="btn kakao" target="_blank" href="${(it.highwayRestArea && !navCoords[String(items.indexOf(it))]) ? kakaoExactRestAreaUrl(it) : kakaoViaUrl(it, navCoords[String(items.indexOf(it))]||c)}">카카오맵 경유 길찾기</a><a class="btn search" target="_blank" href="${kakaoSearch(it)}">장소 확인</a><button class="locate" onclick="map.setView([${c.lat},${c.lon}],14);window.scrollTo({top:0,behavior:'smooth'})">지도에서 보기</button></div>`;
+  <div class="meta">${it.address?it.address+' · ':''}${it.status} · ${it.connector}${it.count?' · NACS '+it.count+'면':''} · <b>${extraLabel}</b> · ${qLabel}${dirLabel}${distLabel}</div>
+  <div class="actions">${navVerified
+    ? `<a class="btn kakao" target="_blank" href="${kakaoViaUrl(it,navCoords[String(x.i)])}">카카오맵 경유 길찾기</a>`
+    : `<a class="btn kakao" target="_blank" href="${kakaoExactRestAreaUrl(it)}">카카오맵 장소 확인</a>`}
+    <a class="btn search" target="_blank" href="${kakaoSearch(it)}">장소 검색</a><button class="locate" onclick="map.setView([${c.lat},${c.lon}],14);window.scrollTo({top:0,behavior:'smooth'})">지도에서 보기</button></div>`;
   list.appendChild(card);
  });
 }
 
-// V44: direction-aware highway rest-area validation.
+// V45: direction-aware highway rest-area validation.
 // Direction words are corridor travel directions, never geographic addresses.
 const directionAnchors={
  "서울":{lat:37.5665,lon:126.9780},"인천":{lat:37.4563,lon:126.7052},
@@ -248,7 +277,7 @@ function directionCompatibility(it,c,destination){
 }
 
 
-// V44 ranking policy:
+// V45 ranking policy:
 // 1) highway NACS actually on the base route
 // 2) nearest from trip origin / earliest along route
 // 3) detour time only as a reference tie-breaker
@@ -329,15 +358,12 @@ async function recommendSortCore(){
    const c=coords[String(i)];
    const rc=routeCoords[String(i)]||c;
    if(!c || !rc)return null;
-   let md=Infinity,prog=0;
-   for(let k=0;k<line.length;k++){
-    const d=hav(rc,{lat:line[k][1],lon:line[k][0]});
-    if(d<md){md=d;prog=k/Math.max(1,line.length-1);}
-   }
+   const rp=routeProgressKm(line,rc);
+   let md=rp.offKm,prog=rp.alongKm;
    const dirScore=directionCompatibility(it,rc,dest);
    const directionMismatch=!!it.highwayRestArea && !!directionWord(it.name) && dirScore < -0.15;
    return {it,i,c,rc,corridor:md,prog,dirScore,directionMismatch};
-  }).filter(Boolean).filter(x=>x.corridor<=35 && x.prog>.01 && x.prog<.99);
+  }).filter(Boolean).filter(x=>x.corridor<=35 && x.prog>1);
 
   pre.sort((a,b)=>a.corridor-b.corridor);
   pre=pre.slice(0,24);
@@ -364,6 +390,10 @@ async function recommendSortCore(){
     if(Math.abs(A.near-B.near)>0.2) return A.near-B.near;   // 2. nearest/earliest from origin
     return A.extra-B.extra;                                  // 3. detour time reference only
   });
+  lastRecommendedResults=[...results];
+  resultSortMode="recommend";
+  document.getElementById("resultSort").style.display="block";
+  document.querySelectorAll(".sortbtn").forEach(b=>b.classList.toggle("active",b.dataset.sort==="recommend"));
   recommendMode=true;
   renderRecommended(results);
   statusEl.textContent=results.length?`실제 경유 추가시간 기준 ${results.length}곳 추천 · 기본 주행 약 ${Math.round(baseSec/60)}분`:"경유 시 +20분 이내 NACS 충전소가 없습니다.";
