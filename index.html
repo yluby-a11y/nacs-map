@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>전국 NACS 충전지도 V43</title>
+<title>전국 NACS 충전지도 V44</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:#f6f7f9;color:#16181d}
@@ -30,7 +30,7 @@ footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
 </style>
 </head>
 <body>
-<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V43</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
+<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V44</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
 <div class="notice" id="status">충전소 195개 위치데이터는 앱 내부에 저장되어 있습니다. 실행 중 충전소 위치를 인터넷에서 다시 찾지 않습니다.</div>
 <div id="map"></div>
 <div class="controls" style="top:66px"><input id="destination" placeholder="목적지 입력 (예: 경주월드, 서울역)" style="flex:2;min-width:210px;padding:11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px"><button onclick="setDestination()">목적지 검색</button><button id="recommendBtn" onclick="recommendSort()" style="background:#0f766e">추천 정렬</button>
@@ -206,7 +206,7 @@ function renderRecommended(results){
  });
 }
 
-// V43: direction-aware highway rest-area validation.
+// V44: direction-aware highway rest-area validation.
 // Direction words are corridor travel directions, never geographic addresses.
 const directionAnchors={
  "서울":{lat:37.5665,lon:126.9780},"인천":{lat:37.4563,lon:126.7052},
@@ -248,7 +248,7 @@ function directionCompatibility(it,c,destination){
 }
 
 
-// V43 ranking policy:
+// V44 ranking policy:
 // 1) highway NACS actually on the base route
 // 2) nearest from trip origin / earliest along route
 // 3) detour time only as a reference tie-breaker
@@ -334,7 +334,9 @@ async function recommendSortCore(){
     const d=hav(rc,{lat:line[k][1],lon:line[k][0]});
     if(d<md){md=d;prog=k/Math.max(1,line.length-1);}
    }
-   return {it,i,c,rc,corridor:md,prog};
+   const dirScore=directionCompatibility(it,rc,dest);
+   const directionMismatch=!!it.highwayRestArea && !!directionWord(it.name) && dirScore < -0.15;
+   return {it,i,c,rc,corridor:md,prog,dirScore,directionMismatch};
   }).filter(Boolean).filter(x=>x.corridor<=35 && x.prog>.01 && x.prog<.99);
 
   pre.sort((a,b)=>a.corridor-b.corridor);
