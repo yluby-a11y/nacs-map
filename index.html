@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>전국 NACS 충전지도 V11</title>
+<title>전국 NACS 충전지도 V12</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:#f6f7f9;color:#16181d}
@@ -26,7 +26,7 @@ footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
 </style>
 </head>
 <body>
-<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V11</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
+<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V12</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
 <div class="notice" id="status">목적지 검색 → 선택 → 추천 정렬 → 추천 충전소의 ‘카카오맵 경유 길찾기’ 순서로 이용하세요.</div>
 <div id="map"></div>
 <div class="controls" style="top:66px"><input id="destination" placeholder="목적지 입력 (예: 경주월드, 서울역)" style="flex:2;min-width:210px;padding:11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px"><button onclick="setDestination()">목적지 검색</button><button onclick="recommendSort()" style="background:#0f766e">추천 정렬</button><button onclick="clearDestination()" style="background:#64748b">해제</button></div><div id="destResults" style="display:none;background:white;max-height:240px;overflow:auto;border-bottom:1px solid #e5e7eb"></div><div id="routeInfo" class="notice" style="display:none"></div><div class="controls" style="top:122px">
@@ -89,6 +89,33 @@ async function geocodeOne(i){
  return null;
 }
 let myPos=null,dest=null,route=null,routeLayer=null,recommendMode=false;
+let myMarker=null,destMarker=null;
+function getMyPos(center=true){
+ return new Promise((resolve,reject)=>{
+  if(!navigator.geolocation){reject(new Error('geolocation unsupported'));return}
+  navigator.geolocation.getCurrentPosition(pos=>{
+   myPos={lat:pos.coords.latitude,lon:pos.coords.longitude};
+   if(myMarker)map.removeLayer(myMarker);
+   myMarker=L.circleMarker([myPos.lat,myPos.lon],{radius:8,weight:3}).addTo(map).bindPopup('내 위치');
+   if(center){map.setView([myPos.lat,myPos.lon],13);myMarker.openPopup()}
+   render();resolve(myPos);
+  },reject,{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
+ });
+}
+async function showMyLocation(){
+ try{await getMyPos(true)}
+ catch(e){alert('현재 위치를 가져오지 못했습니다. 브라우저의 이 사이트 위치 권한을 확인해 주세요.')}
+}
+function clearDestination(){
+ dest=null;route=null;recommendMode=false;
+ document.getElementById('destination').value='';
+ document.getElementById('destResults').style.display='none';
+ document.getElementById('routeInfo').style.display='none';
+ if(destMarker){map.removeLayer(destMarker);destMarker=null}
+ if(routeLayer){map.removeLayer(routeLayer);routeLayer=null}
+ render();
+}
+
 function hav(a,b){const R=6371,toRad=x=>x*Math.PI/180,dLat=toRad(b.lat-a.lat),dLon=toRad(b.lon-a.lon);const q=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(q));}
 function segDistanceKm(p,a,b){ // equirectangular projection, sufficient for ranking
  const lat0=(a.lat+b.lat+p.lat)/3*Math.PI/180, sx=111.32*Math.cos(lat0), sy=110.57;
@@ -106,7 +133,7 @@ async function setDestination(){
  const box=document.getElementById('destResults');box.innerHTML='<div style="padding:10px">검색 중...</div>';box.style.display='block';
  try{const results=await geocodeText(q);if(!results.length){box.innerHTML='<div style="padding:10px">검색 결과가 없습니다. 예: 경주 불국사</div>';return;}window._destCandidates=results;box.innerHTML=results.map((r,i)=>`<button onclick="chooseDestination(${i})" style="display:block;width:100%;text-align:left;background:white;color:#111827;border-bottom:1px solid #e5e7eb;border-radius:0;padding:11px"><b>${r.name}</b><br><span style="font-size:11px;color:#64748b">${r.display}</span></button>`).join('');}catch(e){box.innerHTML='<div style="padding:10px">검색에 실패했습니다. 잠시 후 다시 시도해 주세요.</div>';}
 }
-function chooseDestination(i){const r=window._destCandidates[i];if(!r)return;dest={lat:r.lat,lon:r.lon,name:r.name};recommendMode=false;document.getElementById('destination').value=r.name;document.getElementById('destResults').style.display='none';document.getElementById('routeInfo').style.display='block';document.getElementById('routeInfo').textContent='목적지 선택 완료: '+r.name+' · 이제 추천 정렬을 눌러 주세요.';L.marker([dest.lat,dest.lon]).addTo(map).bindPopup('목적지: '+r.name);render();}
+function chooseDestination(i){const r=window._destCandidates[i];if(!r)return;dest={lat:r.lat,lon:r.lon,name:r.name};recommendMode=false;document.getElementById('destination').value=r.name;document.getElementById('destResults').style.display='none';document.getElementById('routeInfo').style.display='block';document.getElementById('routeInfo').textContent='목적지 선택 완료: '+r.name+' · 이제 추천 정렬을 눌러 주세요.';if(destMarker)map.removeLayer(destMarker);destMarker=L.marker([dest.lat,dest.lon]).addTo(map).bindPopup('목적지: '+r.name);render();}
 async function recommendSort(){
  if(!dest)return alert('먼저 목적지를 검색해서 결과에서 선택해 주세요.');
  if(!myPos){try{await getMyPos(false)}catch(e){return alert('추천 정렬에는 위치 권한이 필요합니다.')}}
