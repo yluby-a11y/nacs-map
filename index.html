@@ -29,7 +29,7 @@ footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
 <header><h1>⚡ 전국 NACS 충전지도</h1><p>테슬라 수퍼차저 제외 · WATER / CHAEVI / SK일렉링크</p></header>
 <div class="notice" id="status">지도 위치를 준비 중입니다. 처음 열 때 지점 좌표를 순차 확인하므로 잠시 걸릴 수 있습니다.</div>
 <div id="map"></div>
-<div class="controls">
+<div class="controls" style="top:66px"><input id="destination" placeholder="목적지 입력 (예: 경주월드, 서울역)" style="flex:2;min-width:210px;padding:11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px"><button onclick="setDestination()">목적지 설정</button><button onclick="clearDestination()" style="background:#64748b">해제</button></div><div id="routeInfo" class="notice" style="display:none"></div><div class="controls" style="top:122px">
   <input id="search" placeholder="충전소명 또는 운영사 검색">
   <button onclick="showMyLocation()">내 위치</button>
   <span class="chip active" data-op="ALL">전체</span>
@@ -54,24 +54,13 @@ function popup(it,c){return `<b>${it.name}</b><br>${it.operator} · ${it.connect
 function render(){
   const q=document.getElementById('search').value.trim().toLowerCase();
   const list=document.getElementById('list'); list.innerHTML=''; markers.clearLayers();
-  let shown=0;
-  items.forEach((it,i)=>{
-    if(selectedOp!=='ALL'&&it.operator!==selectedOp)return;
-    if(q&&!((it.name+' '+it.operator).toLowerCase().includes(q)))return;
-    shown++;
-    const c=coords[i];
-    if(c) L.marker([c.lat,c.lon]).addTo(markers).bindPopup(popup(it,c));
-    const card=document.createElement('div'); card.className='card';
-    card.innerHTML=`<div class="row"><div class="name">${it.name}</div><div class="op">${it.operator}</div></div>
-      <div class="meta">${it.status} · ${it.connector}${it.count?' · NACS '+it.count+'면':''}</div>
-      <div class="actions">
-        <a class="btn kakao" target="_blank" href="${kakaoTo(it,c)}">${c?'카카오맵 길찾기':'카카오맵에서 찾기'}</a>
-        <a class="btn search" target="_blank" href="${kakaoSearch(it)}">장소 확인</a>
-        ${c?`<button class="locate" onclick="map.setView([${c.lat},${c.lon}],14);window.scrollTo({top:0,behavior:'smooth'})">지도에서 보기</button>`:''}
-      </div>`;
-    list.appendChild(card);
-  });
-  document.getElementById('status').textContent=`${shown}개 표시 · 지도 좌표 확인 ${Object.keys(coords).length}/${items.length}개`;
+  let arr=[];
+  items.forEach((it,i)=>{if(selectedOp!=='ALL'&&it.operator!==selectedOp)return;if(q&&!((it.name+' '+it.operator).toLowerCase().includes(q)))return;const c=coords[i];let detour=null,progress=null;if(c&&myPos&&dest){detour=segDistanceKm(c,myPos,dest);const total=hav(myPos,dest);progress=total?Math.min(100,Math.max(0,hav(myPos,c)/total*100)):0;}arr.push({it,i,c,detour,progress});});
+  if(myPos&&dest) arr.sort((a,b)=>(a.detour??9999)-(b.detour??9999));
+  arr.forEach((x,rank)=>{const {it,i,c,detour,progress}=x;if(c){L.marker([c.lat,c.lon]).addTo(markers).bindPopup(popup(it,c));}
+    const rec=myPos&&dest&&c&&rank<8; const card=document.createElement('div'); card.className='card';
+    card.innerHTML=`<div class="row"><div class="name">${rec?'⭐ ':''}${it.name}</div><div class="op">${it.operator}</div></div><div class="meta">${it.status} · ${it.connector}${it.count?' · NACS '+it.count+'면':''}${detour!=null?' · 경로 이탈 약 '+detour.toFixed(1)+'km · 진행 '+Math.round(progress)+'%':''}</div><div class="actions"><a class="btn kakao" target="_blank" href="${myPos&&dest&&c?viaUrl(it,c):kakaoTo(it,c)}">${myPos&&dest&&c?'카카오맵 경유 길찾기':(c?'카카오맵 길찾기':'카카오맵에서 찾기')}</a><a class="btn search" target="_blank" href="${kakaoSearch(it)}">장소 확인</a>${c?`<button class="locate" onclick="map.setView([${c.lat},${c.lon}],14);window.scrollTo({top:0,behavior:'smooth'})">지도에서 보기</button>`:''}</div>`;list.appendChild(card);});
+  document.getElementById('status').textContent=`${arr.length}개 표시 · 지도 좌표 확인 ${Object.keys(coords).length}/${items.length}개${myPos&&dest?' · 가는 길 추천순':''}`;
 }
 async function geocodeMissing(){
   // 공개 지오코딩은 처음 1회만 천천히 실행하고 결과를 기기에 저장합니다.
@@ -94,8 +83,27 @@ async function geocodeMissing(){
   }
   render();
 }
+
+let myPos=null, dest=null;
+function hav(a,b){const R=6371,toRad=x=>x*Math.PI/180,dLat=toRad(b.lat-a.lat),dLon=toRad(b.lon-a.lon);const q=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(q));}
+function segDistanceKm(p,a,b){ // equirectangular projection, sufficient for ranking
+ const lat0=(a.lat+b.lat+p.lat)/3*Math.PI/180, sx=111.32*Math.cos(lat0), sy=110.57;
+ const ax=a.lon*sx, ay=a.lat*sy, bx=b.lon*sx, by=b.lat*sy, px=p.lon*sx, py=p.lat*sy;
+ const vx=bx-ax,vy=by-ay, wx=px-ax,wy=py-ay, vv=vx*vx+vy*vy; let t=vv?Math.max(0,Math.min(1,(wx*vx+wy*vy)/vv)):0;
+ return Math.hypot(px-(ax+t*vx),py-(ay+t*vy));
+}
+async function geocodeText(q){
+ const u='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=kr&q='+encodeURIComponent(q+' 대한민국');
+ const r=await fetch(u,{headers:{'Accept-Language':'ko'}}),d=await r.json(); if(!d||!d[0]) throw new Error('notfound');
+ return {lat:+d[0].lat,lon:+d[0].lon,name:q};
+}
+async function setDestination(){const q=document.getElementById('destination').value.trim();if(!q)return alert('목적지를 입력해 주세요.');try{dest=await geocodeText(q);document.getElementById('routeInfo').style.display='block';document.getElementById('routeInfo').textContent='목적지 설정: '+q+' · 내 위치를 기준으로 가는 길 NACS를 우선 표시합니다.'; if(!myPos) getMyPos(false); render();}catch(e){alert('목적지를 찾지 못했습니다. 장소명이나 주소를 조금 더 구체적으로 입력해 주세요.');}}
+function clearDestination(){dest=null;document.getElementById('routeInfo').style.display='none';render();}
+function getMyPos(show=true){if(!navigator.geolocation){if(show)alert('위치 기능을 사용할 수 없습니다.');return;}navigator.geolocation.getCurrentPosition(p=>{myPos={lat:p.coords.latitude,lon:p.coords.longitude};if(show){L.circleMarker([myPos.lat,myPos.lon],{radius:8}).addTo(map).bindPopup('내 위치').openPopup();map.setView([myPos.lat,myPos.lon],10);}render();},()=>{if(show)alert('브라우저에서 위치 권한을 허용해 주세요.');});}
+function viaUrl(it,c){if(!myPos||!dest||!c)return kakaoTo(it,c); return 'https://map.kakao.com/link/by/car/'+encodeURIComponent('현재 위치')+','+myPos.lat+','+myPos.lon+'/'+encodeURIComponent(it.name)+','+c.lat+','+c.lon+'/'+encodeURIComponent(dest.name)+','+dest.lat+','+dest.lon;}
+
 function showMyLocation(){
- if(!navigator.geolocation) return alert('위치 기능을 사용할 수 없습니다.');
+ getMyPos(true); return; if(!navigator.geolocation) return alert('위치 기능을 사용할 수 없습니다.');
  navigator.geolocation.getCurrentPosition(p=>{
    L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:8}).addTo(map).bindPopup('내 위치').openPopup();
    map.setView([p.coords.latitude,p.coords.longitude],10);
