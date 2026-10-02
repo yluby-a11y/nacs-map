@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>전국 NACS 충전지도 V23</title>
+<title>전국 NACS 충전지도 V24</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:#f6f7f9;color:#16181d}
@@ -26,7 +26,7 @@ footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
 </style>
 </head>
 <body>
-<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V23</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
+<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V24</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
 <div class="notice" id="status">충전소 195개 위치데이터는 앱 내부에 저장되어 있습니다. 실행 중 충전소 위치를 인터넷에서 다시 찾지 않습니다.</div>
 <div id="map"></div>
 <div class="controls" style="top:66px"><input id="destination" placeholder="목적지 입력 (예: 경주월드, 서울역)" style="flex:2;min-width:210px;padding:11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px"><button onclick="setDestination()">목적지 검색</button><button onclick="recommendSort()" style="background:#0f766e">추천 정렬</button><button onclick="clearDestination()" style="background:#64748b">해제</button></div><div id="destResults" style="display:none;background:white;max-height:240px;overflow:auto;border-bottom:1px solid #e5e7eb"></div><div id="routeInfo" class="notice" style="display:none"></div><div class="controls" style="top:122px">
@@ -158,65 +158,78 @@ async function setDestination(){
  try{const results=await geocodeText(q);if(!results.length){box.innerHTML='<div style="padding:10px">검색 결과가 없습니다. 예: 경주 불국사</div>';return;}window._destCandidates=results;box.innerHTML=results.map((r,i)=>`<button onclick="chooseDestination(${i})" style="display:block;width:100%;text-align:left;background:white;color:#111827;border-bottom:1px solid #e5e7eb;border-radius:0;padding:11px"><b>${r.name}</b><br><span style="font-size:11px;color:#64748b">${r.display}</span></button>`).join('');}catch(e){box.innerHTML='<div style="padding:10px">검색에 실패했습니다. 잠시 후 다시 시도해 주세요.</div>';}
 }
 function chooseDestination(i){const r=window._destCandidates[i];if(!r)return;dest={lat:r.lat,lon:r.lon,name:r.name};recommendMode=false;document.getElementById('destination').value=r.name;document.getElementById('destResults').style.display='none';document.getElementById('routeInfo').style.display='block';document.getElementById('routeInfo').textContent='목적지 선택 완료: '+r.name+' · 이제 추천 정렬을 눌러 주세요.';if(destMarker)map.removeLayer(destMarker);destMarker=L.marker([dest.lat,dest.lon]).addTo(map).bindPopup('목적지: '+r.name);render();}
+function renderRecommended(results){
+ const list=document.getElementById('list'); list.innerHTML=''; markers.clearLayers();
+ results.forEach((x,rank)=>{
+  const {it,c}=x;
+  if(c)L.marker([c.lat,c.lon]).addTo(markers).bindPopup(popup(it,c));
+  const extraMin=Math.max(0,Math.round(x.extraSec/60));
+  const card=document.createElement('div'); card.className='card';
+  card.innerHTML=`<div class="row"><div class="name">⭐ ${rank+1}. ${it.name}</div><div class="op">${it.operator}</div></div>
+  <div class="meta">${it.address?it.address+' · ':''}${it.status} · ${it.connector}${it.count?' · NACS '+it.count+'면':''} · <b>경유 시 +${extraMin}분</b></div>
+  <div class="actions"><a class="btn kakao" href="${kakaoViaUrl(it,c)}">카카오맵 경유 길찾기</a><a class="btn search" target="_blank" href="${kakaoSearch(it)}">장소 확인</a><button class="locate" onclick="map.setView([${c.lat},${c.lon}],14);window.scrollTo({top:0,behavior:'smooth'})">지도에서 보기</button></div>`;
+  list.appendChild(card);
+ });
+}
 async function recommendSort(){
-  if(!myPos){ statusEl.textContent="추천 정렬에는 위치 권한이 필요합니다."; await getMyPos(false); if(!myPos)return; }
-  if(!dest){ statusEl.textContent="먼저 목적지를 검색해 선택해주세요."; return; }
-  statusEl.textContent="기본 경로 계산 중…";
-  try{
-    const baseUrl=`https://router.project-osrm.org/route/v1/driving/${myPos.lon},${myPos.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`;
-    const base=await fetch(baseUrl).then(r=>r.json());
-    if(!base.routes?.length) throw new Error("route");
-    const br=base.routes[0], line=br.geometry.coordinates;
-    routeLayer.clearLayers();
-    L.geoJSON(br.geometry,{style:{weight:5,opacity:.7}}).addTo(routeLayer);
-    const baseSec=br.duration;
+ const statusEl=document.getElementById('status');
+ if(!dest){statusEl.textContent="먼저 목적지를 검색해 선택해주세요.";return;}
+ if(!myPos){
+  statusEl.textContent="현재 위치 확인 중…";
+  try{await getMyPos(false)}catch(e){statusEl.textContent="위치 권한을 허용한 뒤 다시 눌러주세요.";return;}
+ }
+ statusEl.textContent="기본 경로 계산 중…";
+ try{
+  const baseUrl=`https://router.project-osrm.org/route/v1/driving/${myPos.lon},${myPos.lat};${dest.lon},${dest.lat}?overview=full&geometries=geojson`;
+  const base=await fetch(baseUrl).then(r=>r.json());
+  if(!base.routes||!base.routes.length)throw new Error("base route");
+  const br=base.routes[0], line=br.geometry.coordinates, baseSec=br.duration;
+  route=line.map(q=>({lat:q[1],lon:q[0]}));
+  if(routeLayer){try{map.removeLayer(routeLayer)}catch(e){}}
+  routeLayer=L.geoJSON(br.geometry,{style:{weight:5,opacity:.7}}).addTo(map);
 
-    // Stage 1: cheap geometric prefilter only to avoid 195 public routing calls.
-    // A wide 35 km corridor is used; final ranking is NOT based on straight-line distance.
-    let pre=items.map((it,i)=>{
-      const c=coords[String(i)]; if(!c)return null;
-      let md=Infinity,prog=0;
-      for(let k=0;k<line.length;k++){
-        const d=haversine(c.lat,c.lon,line[k][1],line[k][0]);
-        if(d<md){md=d;prog=k/Math.max(1,line.length-1);}
-      }
-      return {it,i,c,corridor:md,prog};
-    }).filter(Boolean).filter(x=>x.corridor<=35 && x.prog>.015 && x.prog<.985);
+  // 1차 후보 선정만 넓은 경로 주변 범위로 수행.
+  // 최종 순위/배제는 실제 '출발→충전소→목적지' 주행시간으로 결정한다.
+  let pre=items.map((it,i)=>{
+   const c=coords[String(i)]; if(!c)return null;
+   let md=Infinity,prog=0;
+   for(let k=0;k<line.length;k++){
+    const d=hav(c,{lat:line[k][1],lon:line[k][0]});
+    if(d<md){md=d;prog=k/Math.max(1,line.length-1);}
+   }
+   return {it,i,c,corridor:md,prog};
+  }).filter(Boolean).filter(x=>x.corridor<=35 && x.prog>.01 && x.prog<.99);
 
-    // Keep calls reasonable on the public OSRM demo server.
-    pre.sort((a,b)=>a.corridor-b.corridor);
-    pre=pre.slice(0,24);
-    statusEl.textContent=`후보 ${pre.length}곳 실제 경유시간 계산 중…`;
+  pre.sort((a,b)=>a.corridor-b.corridor);
+  pre=pre.slice(0,24);
+  statusEl.textContent=`후보 ${pre.length}곳 실제 경유시간 계산 중…`;
 
-    const results=[];
-    // Sequential calls reduce burst load and are more reliable on a public demo service.
-    for(let n=0;n<pre.length;n++){
-      const x=pre[n];
-      try{
-        const u=`https://router.project-osrm.org/route/v1/driving/${myPos.lon},${myPos.lat};${x.c.lon},${x.c.lat};${dest.lon},${dest.lat}?overview=false&steps=false`;
-        const rr=await fetch(u).then(r=>r.json());
-        if(!rr.routes?.length)continue;
-        const sec=rr.routes[0].duration;
-        const extra=Math.max(0,sec-baseSec);
-        // Wrong-carriageway stops generally require a long detour/U-turn and are removed.
-        if(extra<=20*60) results.push({...x,extraSec:extra,totalSec:sec});
-      }catch(e){}
-      if(n%4===3) statusEl.textContent=`실제 경유시간 계산 ${n+1}/${pre.length}…`;
-    }
-    results.sort((a,b)=>{
-      const af=/순차 오픈|예정|재검증 필요/.test(a.it.status||"")?1:0;
-      const bf=/순차 오픈|예정|재검증 필요/.test(b.it.status||"")?1:0;
-      // Time is primary; within 2 minutes prefer confirmed/open.
-      if(Math.abs(a.extraSec-b.extraSec)<=120 && af!==bf)return af-bf;
-      return a.extraSec-b.extraSec || a.prog-b.prog;
-    });
-    results.forEach(x=>x.detour=x.corridor);
-    currentRecommendation=results;
-    renderRecommended(results);
-    statusEl.textContent=results.length?`실제 경유 추가시간 기준 ${results.length}곳 추천 · 기본 ${Math.round(baseSec/60)}분`:"경유시간 +20분 이내 NACS 충전소가 없습니다.";
-  }catch(e){
-    statusEl.textContent="경로 계산에 실패했습니다. 잠시 후 다시 시도해주세요.";
+  const results=[];
+  for(let n=0;n<pre.length;n++){
+   const x=pre[n];
+   try{
+    const u=`https://router.project-osrm.org/route/v1/driving/${myPos.lon},${myPos.lat};${x.c.lon},${x.c.lat};${dest.lon},${dest.lat}?overview=false&steps=false`;
+    const rr=await fetch(u).then(r=>r.json());
+    if(!rr.routes||!rr.routes.length)continue;
+    const sec=rr.routes[0].duration, extra=Math.max(0,sec-baseSec);
+    // 반대편 휴게소처럼 유턴/우회가 큰 후보는 제외.
+    if(extra<=20*60)results.push({...x,extraSec:extra,totalSec:sec});
+   }catch(e){}
+   if(n%4===3)statusEl.textContent=`실제 경유시간 계산 ${n+1}/${pre.length}…`;
   }
+  results.sort((a,b)=>{
+   const af=/순차 오픈|예정|재검증 필요/.test(a.it.status||"")?1:0;
+   const bf=/순차 오픈|예정|재검증 필요/.test(b.it.status||"")?1:0;
+   if(Math.abs(a.extraSec-b.extraSec)<=120 && af!==bf)return af-bf;
+   return a.extraSec-b.extraSec || a.prog-b.prog;
+  });
+  recommendMode=true;
+  renderRecommended(results);
+  statusEl.textContent=results.length?`실제 경유 추가시간 기준 ${results.length}곳 추천 · 기본 주행 약 ${Math.round(baseSec/60)}분`:"경유 시 +20분 이내 NACS 충전소가 없습니다.";
+ }catch(e){
+  console.error(e);
+  statusEl.textContent="경로 계산에 실패했습니다. 잠시 후 다시 시도해주세요.";
+ }
 }
 document.getElementById('destination').addEventListener('keydown',e=>{if(e.key==='Enter')setDestination();});
 document.getElementById('search').addEventListener('input',render);
