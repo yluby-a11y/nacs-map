@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>전국 NACS 충전지도 · 수퍼차저 제외</title>
+<title>전국 NACS 충전지도 V3 · 수퍼차저 제외</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:#f6f7f9;color:#16181d}
@@ -26,10 +26,10 @@ footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
 </style>
 </head>
 <body>
-<header><h1>⚡ 전국 NACS 충전지도</h1><p>테슬라 수퍼차저 제외 · WATER / CHAEVI / SK일렉링크</p></header>
+<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V3</small></h1><p>테슬라 수퍼차저 제외 · WATER / CHAEVI / SK일렉링크</p></header>
 <div class="notice" id="status">지도 위치를 준비 중입니다. 처음 열 때 지점 좌표를 순차 확인하므로 잠시 걸릴 수 있습니다.</div>
 <div id="map"></div>
-<div class="controls" style="top:66px"><input id="destination" placeholder="목적지 입력 (예: 경주월드, 서울역)" style="flex:2;min-width:210px;padding:11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px"><button onclick="setDestination()">목적지 설정</button><button onclick="clearDestination()" style="background:#64748b">해제</button></div><div id="routeInfo" class="notice" style="display:none"></div><div class="controls" style="top:122px">
+<div class="controls" style="top:66px"><input id="destination" placeholder="목적지 입력 (예: 경주월드, 서울역)" style="flex:2;min-width:210px;padding:11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px"><button onclick="setDestination()">목적지 설정</button><button onclick="clearDestination()" style="background:#64748b">해제</button></div><div id="destResults" style="display:none;background:white;max-height:240px;overflow:auto;border-bottom:1px solid #e5e7eb"></div><div id="routeInfo" class="notice" style="display:none"></div><div class="controls" style="top:122px">
   <input id="search" placeholder="충전소명 또는 운영사 검색">
   <button onclick="showMyLocation()">내 위치</button>
   <span class="chip active" data-op="ALL">전체</span>
@@ -46,7 +46,7 @@ const map=L.map('map').setView([36.2,127.8],7);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
 const markers=L.layerGroup().addTo(map);
 let selectedOp='ALL', coords={};
-try{coords=JSON.parse(localStorage.getItem('nacs_coords_v1')||'{}')}catch(e){}
+try{coords=JSON.parse(localStorage.getItem('nacs_coords_v3')||'{}')}catch(e){}
 function cleanName(n){ return n.replace(/휴게소/g,'').replace(/\s*(서울|부산|강릉|인천|대전|통영|창원|양평|춘천|속초|대구|순천|제천|평택|청주|영덕|삼척|목포|당진|남이|하남|새만금|전주|광주|포항|울산)방향/g,'').trim(); }
 function kakaoSearch(it){return 'https://map.kakao.com/link/search/'+encodeURIComponent(it.name)}
 function kakaoTo(it,c){return c ? 'https://map.kakao.com/link/to/'+encodeURIComponent(it.name)+','+c.lat+','+c.lon : kakaoSearch(it)}
@@ -67,7 +67,7 @@ async function geocodeMissing(){
   for(let i=0;i<items.length;i++){
     if(coords[i]) continue;
     const it=items[i];
-    const queries=[it.name+' 대한민국', cleanName(it.name)+' 휴게소 대한민국'];
+    const base=cleanName(it.name); const queries=[it.name+' 대한민국',base+'휴게소 대한민국',base+' 고속도로 휴게소 대한민국',base+' 대한민국'];
     let found=null;
     for(const qq of queries){
       try{
@@ -77,7 +77,7 @@ async function geocodeMissing(){
         if(d&&d[0]){found={lat:+d[0].lat,lon:+d[0].lon};break}
       }catch(e){}
     }
-    if(found){coords[i]=found;localStorage.setItem('nacs_coords_v1',JSON.stringify(coords));}
+    if(found){coords[i]=found;localStorage.setItem('nacs_coords_v3',JSON.stringify(coords));}
     if(i%4===0) render();
     await new Promise(r=>setTimeout(r,1100));
   }
@@ -93,23 +93,17 @@ function segDistanceKm(p,a,b){ // equirectangular projection, sufficient for ran
  return Math.hypot(px-(ax+t*vx),py-(ay+t*vy));
 }
 async function geocodeText(q){
- const u='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=kr&q='+encodeURIComponent(q+' 대한민국');
- const r=await fetch(u,{headers:{'Accept-Language':'ko'}}),d=await r.json(); if(!d||!d[0]) throw new Error('notfound');
- return {lat:+d[0].lat,lon:+d[0].lon,name:q};
+ const variants=[q,q+' 대한민국',q+' 관광지 대한민국',q+' 역 대한민국']; let all=[];
+ for(const qq of variants){try{const u='https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&namedetails=1&limit=5&countrycodes=kr&q='+encodeURIComponent(qq);const r=await fetch(u,{headers:{'Accept-Language':'ko'}});const d=await r.json();if(Array.isArray(d))all.push(...d);}catch(e){}}
+ const seen=new Set(),out=[]; for(const x of all){const key=(+x.lat).toFixed(5)+','+(+x.lon).toFixed(5);if(seen.has(key))continue;seen.add(key);out.push({lat:+x.lat,lon:+x.lon,name:(x.namedetails&&(x.namedetails['name:ko']||x.namedetails.name))||x.display_name.split(',')[0],display:x.display_name});} return out.slice(0,6);
 }
-async function setDestination(){const q=document.getElementById('destination').value.trim();if(!q)return alert('목적지를 입력해 주세요.');try{dest=await geocodeText(q);document.getElementById('routeInfo').style.display='block';document.getElementById('routeInfo').textContent='목적지 설정: '+q+' · 내 위치를 기준으로 가는 길 NACS를 우선 표시합니다.'; if(!myPos) getMyPos(false); render();}catch(e){alert('목적지를 찾지 못했습니다. 장소명이나 주소를 조금 더 구체적으로 입력해 주세요.');}}
-function clearDestination(){dest=null;document.getElementById('routeInfo').style.display='none';render();}
-function getMyPos(show=true){if(!navigator.geolocation){if(show)alert('위치 기능을 사용할 수 없습니다.');return;}navigator.geolocation.getCurrentPosition(p=>{myPos={lat:p.coords.latitude,lon:p.coords.longitude};if(show){L.circleMarker([myPos.lat,myPos.lon],{radius:8}).addTo(map).bindPopup('내 위치').openPopup();map.setView([myPos.lat,myPos.lon],10);}render();},()=>{if(show)alert('브라우저에서 위치 권한을 허용해 주세요.');});}
-function viaUrl(it,c){if(!myPos||!dest||!c)return kakaoTo(it,c); return 'https://map.kakao.com/link/by/car/'+encodeURIComponent('현재 위치')+','+myPos.lat+','+myPos.lon+'/'+encodeURIComponent(it.name)+','+c.lat+','+c.lon+'/'+encodeURIComponent(dest.name)+','+dest.lat+','+dest.lon;}
-
-function showMyLocation(){
- getMyPos(true); return; if(!navigator.geolocation) return alert('위치 기능을 사용할 수 없습니다.');
- navigator.geolocation.getCurrentPosition(p=>{
-   L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:8}).addTo(map).bindPopup('내 위치').openPopup();
-   map.setView([p.coords.latitude,p.coords.longitude],10);
- },()=>alert('브라우저에서 위치 권한을 허용해 주세요.'));
+async function setDestination(){
+ const q=document.getElementById('destination').value.trim();if(!q)return alert('목적지를 입력해 주세요.');
+ const box=document.getElementById('destResults');box.innerHTML='<div style="padding:10px">검색 중...</div>';box.style.display='block';
+ try{const results=await geocodeText(q);if(!results.length){box.innerHTML='<div style="padding:10px">검색 결과가 없습니다. 예: 경주 불국사</div>';return;}window._destCandidates=results;box.innerHTML=results.map((r,i)=>`<button onclick="chooseDestination(${i})" style="display:block;width:100%;text-align:left;background:white;color:#111827;border-bottom:1px solid #e5e7eb;border-radius:0;padding:11px"><b>${r.name}</b><br><span style="font-size:11px;color:#64748b">${r.display}</span></button>`).join('');}catch(e){box.innerHTML='<div style="padding:10px">검색에 실패했습니다. 잠시 후 다시 시도해 주세요.</div>';}
 }
-document.getElementById('search').addEventListener('input',render);
+function chooseDestination(i){const r=window._destCandidates[i];if(!r)return;dest={lat:r.lat,lon:r.lon,name:r.name};document.getElementById('destination').value=r.name;document.getElementById('destResults').style.display='none';document.getElementById('routeInfo').style.display='block';document.getElementById('routeInfo').textContent='목적지: '+r.name+' · 가는 길에 가까운 NACS 충전소를 우선 표시합니다.';L.marker([dest.lat,dest.lon]).addTo(map).bindPopup('목적지: '+r.name);if(!myPos)getMyPos(false);render();}
+document.getElementById('destination').addEventListener('keydown',e=>{if(e.key==='Enter')setDestination();});\ndocument.getElementById('search').addEventListener('input',render);
 document.querySelectorAll('.chip').forEach(x=>x.onclick=()=>{document.querySelectorAll('.chip').forEach(y=>y.classList.remove('active'));x.classList.add('active');selectedOp=x.dataset.op;render();});
 render(); geocodeMissing();
 </script>
