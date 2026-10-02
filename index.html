@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>전국 NACS 충전지도 V18</title>
+<title>전국 NACS 충전지도 V19</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;background:#f6f7f9;color:#16181d}
@@ -26,7 +26,7 @@ footer{padding:18px;font-size:11px;color:#64748b;text-align:center}
 </style>
 </head>
 <body>
-<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V18</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
+<header><h1>⚡ 전국 NACS 충전지도 <small style="font-size:11px">V19</small></h1><p>TESLA Supercharger · WATER · CHAEVI · SK일렉링크</p></header>
 <div class="notice" id="status">충전소 195개 위치데이터는 앱 내부에 저장되어 있습니다. 실행 중 충전소 위치를 인터넷에서 다시 찾지 않습니다.</div>
 <div id="map"></div>
 <div class="controls" style="top:66px"><input id="destination" placeholder="목적지 입력 (예: 경주월드, 서울역)" style="flex:2;min-width:210px;padding:11px;border:1px solid #d1d5db;border-radius:10px;font-size:14px"><button onclick="setDestination()">목적지 검색</button><button onclick="recommendSort()" style="background:#0f766e">추천 정렬</button><button onclick="clearDestination()" style="background:#64748b">해제</button></div><div id="destResults" style="display:none;background:white;max-height:240px;overflow:auto;border-bottom:1px solid #e5e7eb"></div><div id="routeInfo" class="notice" style="display:none"></div><div class="controls" style="top:122px">
@@ -51,12 +51,12 @@ function cleanName(n){ return n.replace(/휴게소/g,'').replace(/\s*(서울|부
 function kakaoSearch(it){return 'https://map.kakao.com/link/search/'+encodeURIComponent(it.name)}
 function kakaoTo(it,c){return c ? 'https://map.kakao.com/link/to/'+encodeURIComponent(it.name)+','+c.lat+','+c.lon : kakaoSearch(it)}
 function kakaoViaUrl(it,c){
- if(!c)return kakaoSearch(it);
- if(!myPos||!dest)return kakaoTo(it,c);
- const sp=encodeURIComponent('현재위치')+','+myPos.lat+','+myPos.lon;
- const ep=encodeURIComponent(dest.name)+','+dest.lat+','+dest.lon;
- const vp=encodeURIComponent(it.name)+','+c.lat+','+c.lon;
- return 'https://map.kakao.com/?sName='+encodeURIComponent('현재위치')+'&sX='+myPos.lon+'&sY='+myPos.lat+'&eName='+encodeURIComponent(dest.name)+'&eX='+dest.lon+'&eY='+dest.lat+'&viaName='+encodeURIComponent(it.name)+'&viaX='+c.lon+'&viaY='+c.lat;
+ if(!myPos||!destination||!c) return '#';
+ const enc=encodeURIComponent;
+ const sp=`${enc('현재위치')},${myPos.lat},${myPos.lon}`;
+ const vp=`${enc(it.name)},${c.lat},${c.lon}`;
+ const ep=`${enc(destination.name||'목적지')},${destination.lat},${destination.lon}`;
+ return `kakaomap://route?sp=${sp}&vp=${vp}&ep=${ep}&by=CAR`;
 }
 
 function popup(it,c){return `<b>${it.name}</b><br>${it.operator} · ${it.connector}<br><br><a href="${kakaoTo(it,c)}" target="_blank">카카오맵 길찾기</a>`}
@@ -80,7 +80,7 @@ function render(){
    });
  }
  arr.forEach((x,rank)=>{const {it,c,detour,progress}=x;if(c)L.marker([c.lat,c.lon]).addTo(markers).bindPopup(popup(it,c));const card=document.createElement('div');card.className='card';
- card.innerHTML=`<div class="row"><div class="name">${recommendMode?'⭐ ':''}${it.name}</div><div class="op">${it.operator}</div></div><div class="meta">${it.status} · ${it.connector}${it.count?' · NACS '+it.count+'면':''}${recommendMode?' · 경로 이탈 '+detour.toFixed(1)+'km · 출발 후 약 '+Math.round(progress)+'km':''}</div><div class="actions">${recommendMode&&c?`<a class="btn kakao" target="_blank" href="${kakaoViaUrl(it,c)}">카카오맵 경유 길찾기</a>`:`<a class="btn kakao" target="_blank" href="${kakaoTo(it,c)}">${c?'카카오맵 길찾기':'카카오맵에서 찾기'}</a>`}<a class="btn search" target="_blank" href="${kakaoSearch(it)}">장소 확인</a>${c?`<button class="locate" onclick="map.setView([${c.lat},${c.lon}],14);window.scrollTo({top:0,behavior:'smooth'})">지도에서 보기</button>`:''}</div>`;list.appendChild(card);});
+ card.innerHTML=`<div class="row"><div class="name">${recommendMode?'⭐ ':''}${it.name}</div><div class="op">${it.operator}</div></div><div class="meta">${it.status} · ${it.connector}${it.count?' · NACS '+it.count+'면':''}${recommendMode?' · 경로 이탈 '+detour.toFixed(1)+'km · 출발 후 약 '+Math.round(progress)+'km':''}</div><div class="actions">${recommendMode&&c?`<a class="btn kakao" href="${kakaoViaUrl(it,c)}">카카오맵 앱 경유 길찾기</a>`:`<a class="btn kakao" target="_blank" href="${kakaoTo(it,c)}">${c?'카카오맵 길찾기':'카카오맵에서 찾기'}</a>`}<a class="btn search" target="_blank" href="${kakaoSearch(it)}">장소 확인</a>${c?`<button class="locate" onclick="map.setView([${c.lat},${c.lon}],14);window.scrollTo({top:0,behavior:'smooth'})">지도에서 보기</button>`:''}</div>`;list.appendChild(card);});
  document.getElementById('status').textContent=recommendMode?`추천 ${arr.length}개 · 앱 내장 위치데이터 기준 · 실제 경로 15km 이내 · 출발지에서 만나는 순서`:`${arr.length}개 표시 · 지도 좌표 ${Object.keys(coords).length}/${items.length}개`;
 }
 let myPos=null,dest=null,route=null,routeLayer=null,recommendMode=false;
